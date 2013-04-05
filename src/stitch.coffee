@@ -58,52 +58,63 @@ exports.Package = class Package
       return callback err if err
 
       result = """
-        (function(/*! Stitch !*/) {
+        (function (/*! Stitch !*/) {
           if (!this.#{@identifier}) {
-            var modules = {}, cache = {}, require = function(name, root) {
-              var path = expand(root, name), module = cache[path], fn;
-              if (module) {
-                return module.exports;
-              } else if (fn = modules[path] || modules[path = expand(path, './index')]) {
-                module = {id: path, exports: {}};
-                try {
-                  cache[path] = module;
-                  fn(module.exports, function(name) {
-                    return require(name, dirname(path));
-                  }, module);
+            var modules = {}, cache = {},
+              dirname = function (path) {
+                var i = path.lastIndexOf('/');
+                if (i < 0) {
+                  return path;
+                } else {
+                  return path.substr(0, i);
+                }
+              },
+              expand = function (root, name) {
+                var results = [], parts, part, i, length;
+                if (/^\\.\\.?(\\/|$)/.test(name)) {
+                  parts = root.split('/').concat(name.split('/'));
+                } else {
+                  parts = name.split('/');
+                }
+                for (i = 0, length = parts.length; i < length; i++) {
+                  part = parts[i];
+                  if (part === '..') {
+                    results.pop();
+                  } else if (part && part !== '.') {
+                    results.push(part);
+                  }
+                }
+                return results.join('/');
+              },
+              require = function (name, root) {
+                var path = expand(root, name), module = cache[path], fn;
+                if (module) {
                   return module.exports;
-                } catch (err) {
-                  delete cache[path];
-                  throw err;
                 }
-              } else {
-                throw 'module \\'' + name + '\\' not found';
-              }
-            }, expand = function(root, name) {
-              var results = [], parts, part;
-              if (/^\\.\\.?(\\/|$)/.test(name)) {
-                parts = [root, name].join('/').split('/');
-              } else {
-                parts = name.split('/');
-              }
-              for (var i = 0, length = parts.length; i < length; i++) {
-                part = parts[i];
-                if (part == '..') {
-                  results.pop();
-                } else if (part != '.' && part != '') {
-                  results.push(part);
+                fn = modules[path] || modules[path = expand(path, './index')];
+                if (fn) {
+                  module = {id: path, exports: {}};
+                  try {
+                    cache[path] = module;
+                    fn(module.exports, function (name) {
+                      return require(name, dirname(path));
+                    }, module);
+                    return module.exports;
+                  } catch (err) {
+                    delete cache[path];
+                    throw err;
+                  }
+                } else {
+                  throw 'module \\'' + name + '\\' not found';
                 }
-              }
-              return results.join('/');
-            }, dirname = function(path) {
-              return path.split('/').slice(0, -1).join('/');
-            };
-            this.#{@identifier} = function(name) {
+              };
+            this.#{@identifier} = function (name) {
               return require(name, '');
             }
-            this.#{@identifier}.define = function(bundle) {
-              for (var key in bundle)
+            this.#{@identifier}.define = function (bundle) {
+              for (var key in bundle) {
                 modules[key] = bundle[key];
+              }
             };
           }
           return this.#{@identifier}.define;
